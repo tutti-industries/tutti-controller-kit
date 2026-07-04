@@ -35,7 +35,8 @@ public:
     size_t release(uint8_t k);
     void releaseAll();
 private:
-    void _push_report(uint8_t step);
+    void _push_state();
+    void _enqueue(const kbd_report_t* r, uint8_t step);
 };
 
 extern TinyMouse_ Mouse;
@@ -53,6 +54,9 @@ extern struct kbd_internal_t {
     volatile int head;
     volatile int tail;
     kbd_report_t current;
+    uint8_t key_ref[6];   // key_codes[i] の押下参照カウント（同一キーの多重割当対応）
+    uint8_t mod_ref[8];   // 修飾キー(0x80-0x87)の押下参照カウント
+    uint8_t auto_shift;   // Shift必須ASCIIキーの押下数（>0なら左Shiftを合成）
 } kbd_internal;
 
 extern "C" {

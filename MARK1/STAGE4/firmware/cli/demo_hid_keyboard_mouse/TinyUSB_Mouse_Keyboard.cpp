@@ -2,6 +2,7 @@
 #include <string.h>
 extern "C" {
 #include "funconfig.h"
+#include "ch32fun.h"
 #include "rv003usb.h"
 }
 
@@ -26,78 +27,120 @@ typedef struct { uint8_t mod; uint8_t key; } hid_key_t;
     static const hid_key_t ascii_to_hid[128] = { {0, 0} };
 #endif
 
+// ── Keyboard ─────────────────────────────────────────────────
+
 void TinyKeyboard_::begin() { memset(&kbd_internal, 0, sizeof(kbd_internal)); }
 
-void TinyKeyboard_::_push_report(uint8_t step) {
+// リングバッファへ1レポート積む。
+// 満杯時は最大~5msだけ待ち、それでも満杯なら最新エントリへ上書き合流する
+// （USBサスペンド中・ケーブル半抜け時に無限ループで固まるのを防止。
+//   中間遷移は失われるが最終的なキー状態は必ず一致する）。
+void TinyKeyboard_::_enqueue(const kbd_report_t* r, uint8_t step) {
     int next = (kbd_internal.head + 1) % 16;
-    // 【待ち合わせ】バッファが空くまでループ
-    while (next == kbd_internal.tail);
-
-    kbd_internal.current.step = step;
-    kbd_internal.buffer[kbd_internal.head] = kbd_internal.current;
+    for (int t = 0; t < 500 && next == kbd_internal.tail; t++) Delay_Us(10);
+    if (next == kbd_internal.tail) {
+        int last = (kbd_internal.head + 15) % 16;
+        if (step == 0 && kbd_internal.buffer[last].step == 0) {
+            kbd_internal.buffer[last] = *r;
+            kbd_internal.buffer[last].step = 0;
+        }
+        return; // step=1(write系)はドロップ
+    }
+    kbd_internal.buffer[kbd_internal.head] = *r;
+    kbd_internal.buffer[kbd_internal.head].step = step;
     kbd_internal.head = next;
 }
 
+// 現在の押下状態から modifiers を合成して送信キューへ積む
+void TinyKeyboard_::_push_state() {
+    uint8_t mods = 0;
+    for (int i = 0; i < 8; i++)
+        if (kbd_internal.mod_ref[i]) mods |= (1 << i);
+    if (kbd_internal.auto_shift) mods |= 0x02; // 左Shiftを自動付与
+    kbd_internal.current.modifiers = mods;
+    _enqueue(&kbd_internal.current, 0);
+}
+
 size_t TinyKeyboard_::press(uint8_t k) {
-    if (k >= 136) { // it's a non-printing key (not a modifier)
-        k = k - 136;
-    } else if (k >= 0x80) { // it's a modifier key
-        kbd_internal.current.modifiers |= (1 << (k - 0x80));
-        k = 0;
-    } else {
+    uint8_t shift = 0;
+    if (k >= 136) {              // 非印字キー（修飾キー以外）
+        k -= 136;
+    } else if (k >= 0x80) {      // 修飾キー: 参照カウントで管理（多重割当対応）
+        uint8_t i = k - 0x80;
+        if (kbd_internal.mod_ref[i] < 255) kbd_internal.mod_ref[i]++;
+        _push_state();
+        return 1;
+    } else {                     // ASCII文字
         hid_key_t h = ascii_to_hid[k];
-        if (h.key & h.mod) {   // it's a capital letter or other character reached with shift
-            kbd_internal.current.modifiers |= 0x02; // the left shift modifier
-        }
+        shift = h.mod;           // このキーはShiftが必要か
         k = h.key;
     }
-    for (int i=0; i<6; i++) {
-        if (kbd_internal.current.key_codes[i] == 0) {
-            kbd_internal.current.key_codes[i] = k;
-            break;
-        }
-    }
+    if (k == 0) return 0;        // 変換できない文字は無視
 
-    _push_report(0);
+    // 既に押下中なら参照カウントのみ増やす（同一キーを複数セルに割当てても安全）
+    int slot = -1, empty = -1;
+    for (int i = 0; i < 6; i++) {
+        if (kbd_internal.current.key_codes[i] == k) { slot = i; break; }
+        if (empty < 0 && kbd_internal.current.key_codes[i] == 0) empty = i;
+    }
+    if (slot >= 0) {
+        if (kbd_internal.key_ref[slot] < 255) kbd_internal.key_ref[slot]++;
+    } else if (empty >= 0) {
+        kbd_internal.current.key_codes[empty] = k;
+        kbd_internal.key_ref[empty] = 1;
+    } else {
+        return 0;                // 6キー超過: このキーは破棄（shiftも数えない）
+    }
+    if (shift && kbd_internal.auto_shift < 255) kbd_internal.auto_shift++;
+    _push_state();
     return 1;
 }
 
 size_t TinyKeyboard_::release(uint8_t k) {
-    if (k >= 136) { // it's a non-printing key (not a modifier)
-        k = k - 136;
-    } else if (k >= 0x80) { // it's a modifier key
-        kbd_internal.current.modifiers &= ~(1 << (k - 0x80));
-        k = 0;
+    uint8_t shift = 0;
+    if (k >= 136) {
+        k -= 136;
+    } else if (k >= 0x80) {
+        uint8_t i = k - 0x80;
+        if (kbd_internal.mod_ref[i]) kbd_internal.mod_ref[i]--;
+        _push_state();
+        return 1;
     } else {
         hid_key_t h = ascii_to_hid[k];
-        if (h.key & h.mod) {   // it's a capital letter or other character reached with shift
-            kbd_internal.current.modifiers |= 0x02; // the left shift modifier
-        }
+        shift = h.mod;
         k = h.key;
     }
+    if (k == 0) return 0;
 
-    for (int i=0; i<6; i++) {
-        if (kbd_internal.current.key_codes[i] == k) kbd_internal.current.key_codes[i] = 0;
+    for (int i = 0; i < 6; i++) {
+        if (kbd_internal.current.key_codes[i] == k) {
+            if (kbd_internal.key_ref[i]) kbd_internal.key_ref[i]--;
+            if (kbd_internal.key_ref[i] == 0) kbd_internal.current.key_codes[i] = 0;
+            if (shift && kbd_internal.auto_shift) kbd_internal.auto_shift--;
+            _push_state();
+            return 1;
+        }
     }
-
-    _push_report(0);
-    return 1;
+    return 0;                    // 押されていないキーのreleaseは無視
 }
 
 void TinyKeyboard_::releaseAll() {
     memset(&kbd_internal.current, 0, sizeof(kbd_report_t));
-    _push_report(0);
+    memset(kbd_internal.key_ref, 0, sizeof(kbd_internal.key_ref));
+    memset(kbd_internal.mod_ref, 0, sizeof(kbd_internal.mod_ref));
+    kbd_internal.auto_shift = 0;
+    _push_state();
 }
 
 size_t TinyKeyboard_::write(uint8_t k) {
     if (k >= 128) return 0;
     hid_key_t h = ascii_to_hid[k];
-    kbd_report_t prev = kbd_internal.current;
-    kbd_internal.current.modifiers = h.mod << 1; // if 1, left shift
-    memset(kbd_internal.current.key_codes, 0, 6);
-    kbd_internal.current.key_codes[0] = h.key;
-    _push_report(1); // 送信後に自動で離す
-    kbd_internal.current = prev;
+    if (h.key == 0) return 0;
+    kbd_report_t rpt;
+    memset(&rpt, 0, sizeof(rpt));
+    rpt.modifiers = h.mod ? 0x02 : 0; // Shiftが必要な文字なら左Shift
+    rpt.key_codes[0] = h.key;
+    _enqueue(&rpt, 1); // 送信後に自動で離す
     return 1;
 }
 
@@ -112,30 +155,50 @@ size_t TinyKeyboard_::println(const char* s) {
     return n + write('\n');
 }
 
+// ── Mouse ────────────────────────────────────────────────────
+
 void TinyMouse_::begin() { memset(&mouse_internal, 0, sizeof(mouse_internal)); }
 
+// 8bit飽和加算
+static int8_t sat_add8(int8_t a, int8_t b) {
+    int v = (int)a + (int)b;
+    if (v >  127) v =  127;
+    if (v < -127) v = -127;
+    return (int8_t)v;
+}
+
+// 送信待ちの移動量へ加算合成する。
+// 旧実装の busy-wait (while(changed);) を廃止 → USBサスペンド中でも固まらない。
 void TinyMouse_::move(int8_t x, int8_t y, int8_t wheel, int8_t pan) {
-    while (mouse_internal.changed); // 【待ち合わせ】前回の送信完了を待つ
-    mouse_internal.x = x;
-    mouse_internal.y = y;
-    mouse_internal.wheel = wheel;
-    mouse_internal.pan = pan;
+    __disable_irq(); // USB割り込みとの競合防止（数命令なのでUSBタイミングに影響なし）
+    mouse_internal.x     = sat_add8(mouse_internal.x, x);
+    mouse_internal.y     = sat_add8(mouse_internal.y, y);
+    mouse_internal.wheel = sat_add8(mouse_internal.wheel, wheel);
+    mouse_internal.pan   = sat_add8(mouse_internal.pan, pan);
     mouse_internal.changed = true;
+    __enable_irq();
 }
 
 void TinyMouse_::press(uint8_t b) {
-    while (mouse_internal.changed);
+    __disable_irq();
     mouse_internal.buttons |= b;
     mouse_internal.changed = true;
+    __enable_irq();
 }
 
 void TinyMouse_::release(uint8_t b) {
-    while (mouse_internal.changed);
+    __disable_irq();
     mouse_internal.buttons &= ~b;
     mouse_internal.changed = true;
+    __enable_irq();
 }
 
-void TinyMouse_::click(uint8_t b) { press(b); release(b); }
+void TinyMouse_::click(uint8_t b) {
+    press(b);
+    // pressが1レポートとして送信されるのを待つ（最大~20msで諦める）
+    for (int t = 0; t < 2000 && mouse_internal.changed; t++) Delay_Us(10);
+    release(b);
+}
 
 TinyMouse_ Mouse;
 TinyKeyboard_ Keyboard;
@@ -152,12 +215,12 @@ void usb_handle_user_data( struct usb_endpoint * e, int current_endpoint, uint8_
 void usb_handle_user_in_request( struct usb_endpoint * e, uint8_t * scratchpad, int endp, uint32_t sendtok, struct rv003usb_internal * ist ) {
     if( endp == 1 ) { // Mouse
         if( mouse_internal.changed ) {
-            uint8_t report[5] = { 
-                mouse_internal.buttons, 
-                (uint8_t)mouse_internal.x, 
-                (uint8_t)mouse_internal.y, 
+            uint8_t report[5] = {
+                mouse_internal.buttons,
+                (uint8_t)mouse_internal.x,
+                (uint8_t)mouse_internal.y,
                 (uint8_t)mouse_internal.wheel,
-                (uint8_t)mouse_internal.pan 
+                (uint8_t)mouse_internal.pan
             };
             // 5バイト送信
             usb_send_data( report, 5, 0, sendtok );
