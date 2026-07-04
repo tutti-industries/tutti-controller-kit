@@ -1,0 +1,7 @@
+# flash.bat は必ずCRLFのまま扱う（改行変換しない）
+*.bat -text
+# バイナリ
+*.exe -text
+*.dll -text
+*.bin -text
+*.a -text
