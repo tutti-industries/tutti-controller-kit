@@ -87,6 +87,7 @@ flash.bat
 | `Could not initialize b803boot programmer` | 同上。挿し直しのタイミングの問題です |
 | flash.bat が延々と `....` のまま | USB ケーブルが充電専用（データ線なし）でないか確認。別のポート/ケーブルで試す |
 | 書き込み後に動かない | 一度 USB を抜き挿しして再起動。LED の起動演出が出るか確認 |
+| ビルド時に `ch32v003_GPIO_branchless.h: No such file or directory` | フォルダの階層が深すぎて Windows のパス長制限（260文字）を超えています。`C:\tutti` など浅い場所に移動してからビルドしてください（書き込みだけなら影響なし） |
 
 ## macOS / Linux の場合
 
