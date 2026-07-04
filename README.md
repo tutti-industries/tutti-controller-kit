@@ -8,11 +8,15 @@
 
 ```
 MARK1/
-  firmware/   ファームウェア・コード
-  hardware/   回路図・部品表・基板データなど
-  docs/       取扱説明書・組み立てマニュアル
+  firmware/
+    arduino_ide/  Arduino IDEで書き込む用のコード
+    cli/          コマンドプロンプト（arduino-cli等）で書き込む用のコード
+  hardware/       回路図・部品表・基板データなど
+  docs/           取扱説明書（README.mdがそのまま取説）
 MARK2/ (今後追加予定)
   firmware/
+    arduino_ide/
+    cli/
   hardware/
   docs/
 ```
