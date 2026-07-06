@@ -1,3 +1,3 @@
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0flash.ps1"
+"%~dp0minichlink\minichlink.exe" -w "%~dp0main.bin" flash
 pause

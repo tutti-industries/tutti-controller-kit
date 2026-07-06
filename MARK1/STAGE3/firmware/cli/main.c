@@ -38,8 +38,8 @@ static void blinkStepsAsym(uint8_t pin, const uint32_t onTimes[], const uint32_t
 
 // パターン1: LED1のみ、2Hz/5Hz/10Hzで各2秒間点滅（点灯時間は消灯時間の半分＝duty約33%）
 static void pattern1_led1Blink(void) {
-	const uint32_t onTimes[]  = {10,  10, 10}; // 2Hz, 5Hz, 10Hz の点灯時間(ms)
-	const uint32_t offTimes[] = {490, 190, 90}; // 同、消灯時間(ms)
+	const uint32_t onTimes[]  = {250, 100, 50}; // 2Hz, 5Hz, 10Hz の点灯時間(ms)
+	const uint32_t offTimes[] = {250, 100, 50}; // 同、消灯時間(ms)
 	blinkStepsAsym(LED1_PIN, onTimes, offTimes, 3, 2000);
 }
 
@@ -77,9 +77,19 @@ static void tim1pwm_setFreq(uint32_t freqHz) {
 	TIM1->SWEVGR |= TIM_UG;
 }
 
-// パターン2: LED2のみ、20〜5120Hzで各2秒間PWM出力(duty50%)
+// PWMを止めてタイマーを無効化し、ピンをプレーンなGPIO出力に戻して確実にLOWにする
+static void tim1pwm_stop(void) {
+	TIM1->CH3CVR = 0;
+	TIM1->CTLR1 &= ~TIM_CEN;
+	TIM1->BDTR &= ~TIM_MOE;
+	GPIOC->CFGLR &= ~(0xf << (4 * 3));
+	GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP) << (4 * 3);
+	funDigitalWrite(LED2_PIN, FUN_LOW);
+}
+
+// パターン2: LED2のみ、20〜1000Hzで各2秒間PWM出力(duty50%)
 static void pattern2_led2PwmSweep(void) {
-	const uint32_t freqs[] = {10, 20, 40, 80, 160, 320, 640, 5000};
+	const uint32_t freqs[] = {10, 20, 40, 80, 1000};
 	const int numSteps = sizeof(freqs) / sizeof(freqs[0]);
 
 	tim1pwm_init();
@@ -88,7 +98,7 @@ static void pattern2_led2PwmSweep(void) {
 		TIM1->CH3CVR = 128; // duty 50%
 		Delay_Ms(2000);
 	}
-	TIM1->CH3CVR = 0;
+	tim1pwm_stop();
 }
 
 // ---- TIM2 (LED3 / PC0, T2CH3) PWM ----
@@ -115,7 +125,16 @@ static void tim2pwm_init(void) {
 	TIM2->CTLR1 |= TIM_CEN;
 }
 
-// 0〜πを33点サンプリングした正弦(呼吸)テーブル
+// PWMを止めてタイマーを無効化し、ピンをプレーンなGPIO出力に戻して確実にLOWにする
+static void tim2pwm_stop(void) {
+	TIM2->CH3CVR = 0;
+	TIM2->CTLR1 &= ~TIM_CEN;
+	GPIOC->CFGLR &= ~(0xf << (4 * 0));
+	GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP) << (4 * 0);
+	funDigitalWrite(LED3_PIN, FUN_LOW);
+}
+
+// パターン3のテーブル
 static const uint8_t SINE_TABLE[33] = {
 	    0,   1,   2,   5,  10,  15,  21,  29,  37,  47,  57,  67,  79,  90, 103, 115, 128,
 	  140, 152, 165, 176, 188, 198, 208, 218, 226, 234, 240, 245, 249, 253, 254, 255
@@ -126,7 +145,7 @@ static const uint8_t SINE_TABLE[33] = {
 static void pattern3_led3Trapezoid(void) {
 	const uint32_t STEP_MS = 31; // ランプ中の1ステップの表示時間
 	const uint32_t HOLD_TOP_MS = 500;    // 頂点でのホールド時間
-	const uint32_t HOLD_BOTTOM_MS = 500; // 底でのホールド時間
+	const uint32_t HOLD_BOTTOM_MS = 200; // 底でのホールド時間
 	const uint32_t TOTAL_MS = 10000;
 
 	tim2pwm_init();
@@ -148,7 +167,7 @@ static void pattern3_led3Trapezoid(void) {
 		Delay_Ms(HOLD_BOTTOM_MS); // 底ホールド
 		elapsed += HOLD_BOTTOM_MS;
 	}
-	TIM2->CH3CVR = 0;
+	tim2pwm_stop();
 }
 
 int main(void) {
@@ -166,10 +185,10 @@ int main(void) {
 
 	while (1) {
 		pattern1_led1Blink();
-		Delay_Ms(500);
+		Delay_Ms(50);
 		pattern2_led2PwmSweep();
-		Delay_Ms(500);
+		Delay_Ms(50);
 		pattern3_led3Trapezoid();
-		Delay_Ms(500);
+		Delay_Ms(50);
 	}
 }
