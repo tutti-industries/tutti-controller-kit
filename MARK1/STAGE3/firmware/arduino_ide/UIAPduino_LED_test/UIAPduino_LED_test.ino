@@ -1,6 +1,6 @@
-const int LED1_PIN = 12; // LED_1 IO
-const int LED2_PIN = 5;  // LED_2 PWM
-const int LED3_PIN = 2;  // LED_3 PWM
+const int LED1_PIN = 12; // LED_1 PD2 IO
+const int LED2_PIN = 5;  // LED_2 PC3 PWM(TIM1_CH3)
+const int LED3_PIN = 2;  // LED_3 PC0 PWM(TIM2_CH3)
 
 void allOff() {
   digitalWrite(LED1_PIN, LOW);
@@ -36,14 +36,14 @@ void blinkStepsAsym(int pin, const unsigned long onTimes[], const unsigned long 
 
 // パターン1: LED1のみ、2Hz/5Hz/10Hzで各2秒間点滅（点灯時間は消灯時間の半分＝duty約33%）
 void pattern1_led1Blink() {
-  const unsigned long onTimes[]  = {10,  10, 10}; // 2Hz, 5Hz, 10Hz の点灯時間(ms)
-  const unsigned long offTimes[] = {490, 190, 90}; // 同、消灯時間(ms)
+  const unsigned long onTimes[]  = {250, 100, 50}; // 2Hz, 5Hz, 10Hz の点灯時間(ms)
+  const unsigned long offTimes[] = {250, 100, 50}; // 同、消灯時間(ms)
   blinkStepsAsym(LED1_PIN, onTimes, offTimes, 3, 2000);
 }
 
 // パターン2: LED2のみ、20〜5120Hzで各2秒間PWM出力(duty50%)
 void pattern2_led2PwmSweep() {
-  const uint32_t freqs[] = {10, 20, 40, 80, 160, 320, 640, 5000};
+  const uint32_t freqs[] = {10, 20, 40, 80, 1000};
   const int numSteps = sizeof(freqs) / sizeof(freqs[0]);
   const unsigned long STEP_DURATION_MS = 2000;
 
@@ -89,6 +89,7 @@ void pattern3_led3Trapezoid() {
 }
 
 void setup() {
+  analogWriteResolution(8); // このコアのanalogWriteは既定12bit(0-4095)のため、8bit(0-255)に設定
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
   pinMode(LED3_PIN, OUTPUT);
@@ -101,9 +102,9 @@ void setup() {
 
 void loop() {
   pattern1_led1Blink();
-  delay(500);
+  delay(50);
   pattern2_led2PwmSweep();
-  delay(500);
+  delay(50);
   pattern3_led3Trapezoid();
-  delay(500);
+  delay(50);
 }
