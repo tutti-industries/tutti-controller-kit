@@ -1,0 +1,8 @@
+main.elf
+main.hex
+main.lst
+main.map
+main_ext.bin
+ch32fun/generated__.ld
+ch32fun/generated_*.ld
+nul
