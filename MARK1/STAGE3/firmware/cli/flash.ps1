@@ -25,7 +25,9 @@ function Find-ArduinoCli {
 $ArduinoCli = Find-ArduinoCli
 if (-not $ArduinoCli) {
     Write-Host "arduino-cli が見つかりませんでした。" -ForegroundColor Red
-    Write-Host "Arduino IDE (https://www.arduino.cc/en/software) をインストールしてから、もう一度実行してください。"
+    Write-Host "以下のいずれかでインストールしてから、もう一度実行してください（Arduino IDEは不要です）。"
+    Write-Host "  winget install ArduinoSA.CLI"
+    Write-Host "  または https://arduino.github.io/arduino-cli/latest/installation/ から手動インストール"
     exit 1
 }
 Write-Host "arduino-cli: $ArduinoCli"
