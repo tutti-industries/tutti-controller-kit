@@ -34,7 +34,7 @@ void blinkStepsAsym(int pin, const unsigned long onTimes[], const unsigned long 
   digitalWrite(pin, LOW);
 }
 
-// パターン1: LED1のみ、2Hz/5Hz/10Hzで各2秒間点滅（点灯時間は消灯時間の半分＝duty約33%）
+// パターン1: LED1のみ、2Hz/5Hz/10Hzで各2秒間点滅（点灯時間と消灯時間が等しい＝duty50%）
 void pattern1_led1Blink() {
   const unsigned long onTimes[]  = {250, 100, 50}; // 2Hz, 5Hz, 10Hz の点灯時間(ms)
   const unsigned long offTimes[] = {250, 100, 50}; // 同、消灯時間(ms)
