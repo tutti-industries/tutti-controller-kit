@@ -1,11 +1,49 @@
 const int LED1_PIN = 32; // LED_1 P3.2 IO
-const int LED2_PIN = 31; // LED_2 P3.1 PWM
-const int LED3_PIN = 30; // LED_3 P3.0 PWM
+const int LED2_PIN = 31; // LED_2 P3.1 ソフトPWM(ハードPWM非対応ピン)
+const int LED3_PIN = 30; // LED_3 P3.0 ソフトPWM(ハードPWM非対応ピン)
+
+// CH552のハードPWMはP1.4/P1.5/P3.3/P3.4のみ。上記3ピンは非対応のため、
+// GPIOのビットバンギング(ソフトPWM)で点滅・PWM・呼吸を生成する。
 
 void allOff() {
   digitalWrite(LED1_PIN, LOW);
   digitalWrite(LED2_PIN, LOW);
   digitalWrite(LED3_PIN, LOW);
+}
+
+// delayMicrosecondsの安全域を超える長い待ち(低周波用)を、delay(1)刻みで代替する
+void delayUsLong(unsigned long us) {
+  while (us >= 1000) {
+    delay(1);
+    us -= 1000;
+  }
+  if (us) delayMicroseconds((unsigned int)us);
+}
+
+// ソフトPWM: 指定周波数・duty50%の矩形波をdurationMsだけ出力する
+void softPwmFreq50(int pin, uint32_t freqHz, unsigned long durationMs) {
+  unsigned long halfPeriodUs = 500000UL / freqHz; // 50%duty時の半周期(us)
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    digitalWrite(pin, HIGH);
+    delayUsLong(halfPeriodUs);
+    digitalWrite(pin, LOW);
+    delayUsLong(halfPeriodUs);
+  }
+  digitalWrite(pin, LOW);
+}
+
+// ソフトPWM: 約500Hzのキャリアで、指定duty(0-255)をdurationMsだけ出力する
+void softPwmDuty(int pin, uint8_t duty, unsigned long durationMs) {
+  const unsigned int PERIOD_US = 2000; // 約500Hz(ちらつき知覚しにくい)
+  unsigned int onUs  = (unsigned int)(((unsigned long)PERIOD_US * duty) / 255);
+  unsigned int offUs = PERIOD_US - onUs;
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    if (onUs)  { digitalWrite(pin, HIGH); delayMicroseconds(onUs); }
+    if (offUs) { digitalWrite(pin, LOW);  delayMicroseconds(offUs); }
+  }
+  digitalWrite(pin, LOW);
 }
 
 // パターン0: 3つ同時点滅で点灯確認（他LEDへの影響が出る唯一の区間）
@@ -41,18 +79,16 @@ void pattern1_led1Blink() {
   blinkStepsAsym(LED1_PIN, onTimes, offTimes, 3, 2000);
 }
 
-// パターン2: LED2のみ、20〜5120Hzで各2秒間PWM出力(duty50%)
+// パターン2: LED2のみ、10〜1000Hzで各2秒間ソフトPWM出力(duty50%)
 void pattern2_led2PwmSweep() {
   const uint32_t freqs[] = {10, 20, 40, 80, 1000};
   const int numSteps = sizeof(freqs) / sizeof(freqs[0]);
   const unsigned long STEP_DURATION_MS = 2000;
 
   for (int s = 0; s < numSteps; s++) {
-    analogWriteFrequency(freqs[s]);
-    analogWrite(LED2_PIN, 128); // duty 50%
-    delay(STEP_DURATION_MS);
+    softPwmFreq50(LED2_PIN, freqs[s], STEP_DURATION_MS);
   }
-  analogWrite(LED2_PIN, 0);
+  digitalWrite(LED2_PIN, LOW);
 }
 
 // 0〜πを33点サンプリングした正弦(呼吸)テーブル。
@@ -70,26 +106,21 @@ void pattern3_led3Trapezoid() {
   const unsigned long HOLD_BOTTOM_MS = 500; // 底でのホールド時間
   const unsigned long TOTAL_MS = 10000;
 
-  analogWriteFrequency(200); // PWM周期を約5ms(200Hz)に変更
-
   unsigned long start = millis();
   while (millis() - start < TOTAL_MS) {
     for (int idx = 0; idx < SINE_TABLE_SIZE; idx++) { // 立ち上げ(duty0%→100%)
-      analogWrite(LED3_PIN, SINE_TABLE[idx]);
-      delay(STEP_MS);
+      softPwmDuty(LED3_PIN, SINE_TABLE[idx], STEP_MS);
     }
-    delay(HOLD_TOP_MS); // 頂点ホールド
+    softPwmDuty(LED3_PIN, 255, HOLD_TOP_MS); // 頂点ホールド
     for (int idx = SINE_TABLE_SIZE - 1; idx >= 0; idx--) { // 立ち下げ(duty100%→0%)
-      analogWrite(LED3_PIN, SINE_TABLE[idx]);
-      delay(STEP_MS);
+      softPwmDuty(LED3_PIN, SINE_TABLE[idx], STEP_MS);
     }
-    delay(HOLD_BOTTOM_MS); // 底ホールド
+    delay(HOLD_BOTTOM_MS); // 底ホールド(消灯)
   }
-  analogWrite(LED3_PIN, 0);
+  digitalWrite(LED3_PIN, LOW);
 }
 
 void setup() {
-  analogWriteResolution(8); // このコアのanalogWriteは既定12bit(0-4095)のため、8bit(0-255)に設定
   pinMode(LED1_PIN, OUTPUT);
   pinMode(LED2_PIN, OUTPUT);
   pinMode(LED3_PIN, OUTPUT);
