@@ -1,0 +1,7 @@
+# Local build artifacts
+*.bin
+*.elf
+*.hex
+*.lst
+*.map
+*_ext.bin
