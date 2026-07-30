@@ -1,0 +1,8 @@
+# Keep Windows batch files byte-for-byte so CRLF is preserved.
+*.bat -text
+
+# Binary files
+*.exe -text
+*.dll -text
+*.bin -text
+*.a -text

@@ -11,7 +11,9 @@ UIAPduino Pro Micro CH32V003 V1.4 用の統合ファームです。
 
 ## ビルド
 
-このフォルダで次を実行します。
+通常は1つ上のフォルダにある `build.bat` を実行します。
+
+このフォルダから直接ビルドする場合は次を実行します。
 
 ```text
 make clean && make build
@@ -19,17 +21,12 @@ make clean && make build
 
 ## 書き込み
 
-```text
-../../../STAGE4/firmware/cli/ch32v003fun/minichlink/minichlink.exe -c 0x1209b803 -w demo_hid_keyboard_mouse_led.bin flash -b
-```
-
-USBを挿し直した直後に実行してください。
+1つ上の `flash.bat` を実行し、画面の指示に従ってUSBを挿し直してください。
 
 ## 編集箇所
 
 キーマップ、行列ピン、LEDピン、ジョイスティック感度は
 `demo_hid_keyboard_mouse_led.cpp` 冒頭の定義を編集します。
 
-このプロジェクトは `MARK1/STAGE4/firmware/cli` にある実績済みの
-USB/HIDスタックを参照してビルドします。そのため、STAGE4フォルダと
-このフォルダは同じリポジトリ内の現在の相対配置で使用してください。
+このプロジェクトは `MARK1/common/firmware` 内の `vendor` と `shared` にある
+USB/HIDスタックを参照します。STAGE1〜4のfirmwareフォルダには依存しません。

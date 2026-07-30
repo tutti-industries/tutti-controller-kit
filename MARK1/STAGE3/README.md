@@ -10,8 +10,9 @@
 
 ## コードの書き込み
 
-- Arduino IDEを使う場合 → [firmware/arduino_ide](firmware/arduino_ide)
-- コマンドプロンプトを使う場合 → [firmware/cli](firmware/cli)
+ファームウェアと書き込み手順は、STAGE4と共通化されています。
+
+→ [MARK1 共通ファームウェア](../common/firmware)
 
 ## 動画
 

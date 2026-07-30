@@ -1,5 +1,5 @@
 // UIAPduino Pro Micro CH32V003: HID keyboard/mouse + idle LED animation.
-// The USB/HID stack is shared with MARK1/STAGE4/firmware/cli.
+// The USB/HID stack is provided by this common firmware package.
 
 #include <stdint.h>
 
@@ -108,7 +108,7 @@ static bool anyMatrixKey(const uint8_t raw[ROW_COUNT][COL_COUNT]) {
 
 // ---- Idle LED animation --------------------------------------------------
 // These functions use only PC0/PC3 and TIM1/TIM2.  USB and matrix pins are
-// deliberately untouched; do not call STAGE3's funGpioInitAll() here.
+// deliberately untouched; avoid broad GPIO reinitialization here.
 
 static void ledsOff(void) {
     GPIO_digitalWrite_lo(LED1);
