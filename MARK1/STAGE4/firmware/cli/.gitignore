@@ -1,8 +1,0 @@
-# ビルド生成物（配布用の prebuilt/*.bin は除外しない）
-demo_hid_keyboard_mouse/*.bin
-demo_hid_keyboard_mouse/*.elf
-demo_hid_keyboard_mouse/*.hex
-demo_hid_keyboard_mouse/*.lst
-demo_hid_keyboard_mouse/*.map
-ch32v003fun/ch32fun/generated__.ld
-nul

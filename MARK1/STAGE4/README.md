@@ -10,8 +10,10 @@
 
 ## コードの書き込み
 
-- Arduino IDEを使う場合 → [firmware/arduino_ide](firmware/arduino_ide)
-- コマンドプロンプトを使う場合 → [firmware/cli](firmware/cli)
+STAGE3のLED制御と、STAGE4のキーボード・マウス機能を統合した
+共通ファームウェアを使用します。
+
+→ [MARK1 共通ファームウェア](../common/firmware)
 
 ## 動画
 
