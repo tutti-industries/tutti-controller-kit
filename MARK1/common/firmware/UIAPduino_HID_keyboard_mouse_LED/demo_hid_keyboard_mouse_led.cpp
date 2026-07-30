@@ -387,22 +387,27 @@ int main(void) {
     while (1) {
         uint8_t raw[ROW_COUNT][COL_COUNT];
         scanMatrix(raw);
-        int dx = GPIO_analogRead(GPIO_Ain0_A2) - centerX;
-        int dy = GPIO_analogRead(GPIO_Ain1_A1) - centerY;
 
         if (!hidActive) {
-            if (anyMatrixKey(raw) || joystickMoved(dx, dy)) {
+            // Only a matrix-key press exits the idle animation.  Joystick ADC
+            // pins may float when the joystick circuit is not populated, so
+            // their values must never be used as a wake trigger.
+            if (anyMatrixKey(raw)) {
                 // The current raw state is deliberately processed below, so the
                 // action that wakes the controller is also delivered to the PC.
                 idleStop();
                 hidActive = true;
-                processHid(raw, dx, dy);
             } else {
                 idleTick(10);
+                Delay_Ms(10);
+                continue;
             }
-        } else {
-            processHid(raw, dx, dy);
         }
+
+        // ADC is read only after a matrix key has activated HID mode.
+        int dx = GPIO_analogRead(GPIO_Ain0_A2) - centerX;
+        int dy = GPIO_analogRead(GPIO_Ain1_A1) - centerY;
+        processHid(raw, dx, dy);
 
         Delay_Ms(10);
     }
